@@ -132,7 +132,35 @@ final class PythonRuntimePolicy
             return false;
         }
 
+        /*
+         * Archived source and standalone configuration modules remain
+         * valid syntax candidates but are not active runtime modules.
+         */
+        if ($this->isArchiveSource($path)) {
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * Determine whether a Python source path belongs to an archived or
+     * standalone configuration surface that should not be imported as
+     * active runtime code.
+     */
+    public function isArchiveSource(string $relativePath): bool
+    {
+        $path = $this->normalize($relativePath);
+        $basename = basename($path);
+
+        if (
+            $this->hasPathSegment($path, 'archive')
+            || $this->hasPathSegment($path, 'archives')
+        ) {
+            return true;
+        }
+
+        return str_ends_with($basename, '.conf.py');
     }
 
     /**

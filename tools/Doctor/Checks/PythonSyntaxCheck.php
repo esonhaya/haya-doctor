@@ -24,9 +24,11 @@ final class PythonSyntaxCheck implements CheckInterface
 
         if ($python === null) {
             return new CheckResult(
-                title: 'Python Syntax Integrity',
+                title:
+                    'Python Syntax Integrity',
                 status: 'FAIL',
-                summary: 'Python executable was not found.',
+                summary:
+                    'Python executable was not found.',
                 details: [],
                 recommendations: [
                     'Install Python or configure a Python executable.',
@@ -35,16 +37,21 @@ final class PythonSyntaxCheck implements CheckInterface
             );
         }
 
-        $root = $this->root ?? getcwd();
+        $root =
+            $this->root ?? getcwd();
 
         $files =
-            PythonFileScanner::files($root);
+            PythonFileScanner::files(
+                $root
+            );
 
         if ($files === []) {
             return new CheckResult(
-                title: 'Python Syntax Integrity',
+                title:
+                    'Python Syntax Integrity',
                 status: 'PASS',
-                summary: 'No Python source files discovered.',
+                summary:
+                    'No Python source files discovered.',
                 details: [
                     'Python executable: ' . $python,
                 ],
@@ -53,49 +60,30 @@ final class PythonSyntaxCheck implements CheckInterface
             );
         }
 
-        $checker =
-            new PythonSyntaxChecker();
-
-        $failures = [];
-        $timeouts = [];
-        $passed = 0;
-
-        foreach ($files as $file) {
-            $result =
-                $checker->check(
+        $result =
+            (new PythonSyntaxChecker())
+                ->checkFiles(
                     $root,
-                    $file,
+                    $files,
                     $python
                 );
 
-            if ($result['ok']) {
-                $passed++;
-                continue;
-            }
-
-            if ($result['status'] === 'TIMEOUT') {
-                $timeouts[$file] =
-                    $result['error'];
-            } else {
-                $failures[$file] =
-                    $result['error'];
-            }
-        }
-
-        if (
-            $failures === []
-            && $timeouts === []
-        ) {
+        if ($result['ok']) {
             return new CheckResult(
-                title: 'Python Syntax Integrity',
+                title:
+                    'Python Syntax Integrity',
                 status: 'PASS',
                 summary:
-                    count($files)
+                    $result['checked']
                     . ' Python file(s) compiled successfully.',
                 details: [
                     'Python executable: ' . $python,
-                    'Python files: ' . count($files),
-                    'Successful compilation: ' . $passed,
+                    'Python files: '
+                        . $result['checked'],
+                    'Successful compilation: '
+                        . $result['checked'],
+                    'Failed compilation: 0',
+                    'Python processes: 1',
                 ],
                 recommendations: [],
                 score: 100,
@@ -104,24 +92,32 @@ final class PythonSyntaxCheck implements CheckInterface
 
         $details = [
             'Python executable: ' . $python,
-            'Python files: ' . count($files),
-            'Successful compilation: ' . $passed,
-            'Syntax failures: ' . count($failures),
-            'Timeouts: ' . count($timeouts),
+            'Python files: '
+                . $result['checked'],
+            'Successful compilation: '
+                . (
+                    $result['checked']
+                    - count($result['failures'])
+                ),
+            'Syntax failures: '
+                . count($result['failures']),
+            'Python processes: 1',
         ];
 
-        foreach ($failures as $file => $error) {
+        foreach (
+            $result['failures']
+            as $failure
+        ) {
             $details[] =
-                'FAIL ' . $file . ' — ' . $error;
-        }
-
-        foreach ($timeouts as $file => $error) {
-            $details[] =
-                'TIMEOUT ' . $file . ' — ' . $error;
+                'FAIL '
+                . $failure['file']
+                . ' — '
+                . $failure['error'];
         }
 
         return new CheckResult(
-            title: 'Python Syntax Integrity',
+            title:
+                'Python Syntax Integrity',
             status: 'FAIL',
             summary:
                 'One or more Python files failed syntax validation.',

@@ -23,7 +23,11 @@ final class CheckResult
         public int $score = 100,
         public DiagnosticFindingCollection $findings = new DiagnosticFindingCollection(),
         public string $scope = "PROJECT",
+        public string $id = "",
+        /** @var array<string,mixed> */
+        public array $metadata = [],
     ) {
+        $this->status = CheckStatus::normalize($this->status);
     }
 
     public function addFinding(
@@ -49,5 +53,10 @@ final class CheckResult
     public function hasFindings(): bool
     {
         return $this->findingCount() > 0;
+    }
+
+    public function isFailure(): bool
+    {
+        return $this->status === CheckStatus::FAIL;
     }
 }

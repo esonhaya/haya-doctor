@@ -6,6 +6,7 @@ namespace Tools\Doctor\Output;
 
 use Tools\Doctor\Advisor\PriorityAdvisor;
 use Tools\Doctor\Advisor\RecommendationAdvisor;
+use Tools\Doctor\DTO\CheckStatus;
 use Tools\Doctor\DTO\DoctorResult;
 
 final class ConsoleRenderer
@@ -21,13 +22,13 @@ final class ConsoleRenderer
 
         echo PHP_EOL;
         echo "======================================" . PHP_EOL;
-        echo " BoardPrep Doctor" . PHP_EOL;
+        echo " Haya Doctor" . PHP_EOL;
         echo "======================================" . PHP_EOL;
         echo PHP_EOL;
 
         foreach ($report->checks as $check) {
 
-            echo "[{$check->status}] {$check->title}" . PHP_EOL;
+            echo "[{$check->status}] {$check->id} {$check->title}" . PHP_EOL;
 
             if ($check->summary !== "") {
                 echo "  > {$check->summary}" . PHP_EOL;
@@ -41,19 +42,19 @@ final class ConsoleRenderer
 
             switch ($check->status) {
 
-                case "PASS":
+                case CheckStatus::PASS:
                     $pass++;
                     break;
 
-                case "WARNING":
+                case CheckStatus::WARN:
                     $warning++;
                     break;
 
-                case "FAIL":
+                case CheckStatus::FAIL:
                     $fail++;
                     break;
 
-                default:
+                case CheckStatus::SKIP:
                     $info++;
                     break;
 
@@ -80,9 +81,9 @@ final class ConsoleRenderer
         echo PHP_EOL;
 
         echo "PASS     : {$pass}" . PHP_EOL;
-        echo "WARNING  : {$warning}" . PHP_EOL;
+        echo "WARN     : {$warning}" . PHP_EOL;
         echo "FAIL     : {$fail}" . PHP_EOL;
-        echo "INFO     : {$info}" . PHP_EOL;
+        echo "SKIP     : {$info}" . PHP_EOL;
         echo PHP_EOL;
 
         echo "Project Health : {$health}%" . PHP_EOL;
@@ -116,7 +117,7 @@ final class ConsoleRenderer
 
         foreach ($report->checks as $check) {
 
-            if ($check->status === "PASS") {
+            if ($check->status === CheckStatus::PASS) {
                 continue;
             }
 

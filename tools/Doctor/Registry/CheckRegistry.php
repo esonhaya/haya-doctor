@@ -5,10 +5,34 @@ declare(strict_types=1);
 namespace Tools\Doctor\Registry;
 
 use ReflectionClass;
+use RuntimeException;
+use Tools\Doctor\Contracts\CheckIdentityInterface;
 use Tools\Doctor\Contracts\CheckInterface;
 
 final class CheckRegistry
 {
+    /** @var array<string,CheckInterface> */
+    private array $registered = [];
+
+    /**
+     * Register an already constructed host check.
+     */
+    public function register(CheckInterface $check, ?string $id = null): void
+    {
+        $id ??= self::idFor($check);
+        $id = trim($id);
+
+        if ($id === '') {
+            throw new RuntimeException('Doctor check IDs cannot be empty.');
+        }
+
+        if (isset($this->registered[$id])) {
+            throw new RuntimeException(sprintf('Duplicate Doctor check ID "%s".', $id));
+        }
+
+        $this->registered[$id] = $check;
+    }
+
     /**
      * Register check directories supplied by the host.
      *
@@ -22,21 +46,32 @@ final class CheckRegistry
 
         foreach ($directories as $directory) {
             if (!is_dir($directory)) {
-                continue;
+                throw new RuntimeException(
+                    "Doctor check directory not found: {$directory}"
+                );
             }
 
-            foreach (
-                glob(
-                    rtrim($directory, DIRECTORY_SEPARATOR)
-                    . DIRECTORY_SEPARATOR
-                    . '*.php'
-                ) ?: []
-                as $file
-            ) {
+            $files = glob(
+                rtrim($directory, DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR
+                . '*.php'
+            );
+
+            if ($files === false) {
+                throw new RuntimeException(
+                    "Unable to scan Doctor check directory: {$directory}"
+                );
+            }
+
+            sort($files, SORT_STRING);
+
+            foreach ($files as $file) {
                 $class = $this->classFromFile($file);
 
                 if ($class === null) {
-                    continue;
+                    throw new RuntimeException(
+                        "Unable to resolve Doctor check class: {$file}"
+                    );
                 }
 
                 if (!class_exists($class)) {
@@ -44,7 +79,9 @@ final class CheckRegistry
                 }
 
                 if (!class_exists($class)) {
-                    continue;
+                    throw new RuntimeException(
+                        "Doctor check class not found after loading: {$class}"
+                    );
                 }
 
                 $reflection =
@@ -59,22 +96,12 @@ final class CheckRegistry
                     continue;
                 }
 
-                $checks[] = new $class();
+                $check = new $class();
+                $this->register($check);
             }
         }
 
-        usort(
-            $checks,
-            static fn(
-                CheckInterface $a,
-                CheckInterface $b
-            ): int =>
-                $a->priority()
-                <=>
-                $b->priority()
-        );
-
-        return $checks;
+        return $this->all();
     }
 
     /**
@@ -84,9 +111,54 @@ final class CheckRegistry
     public function all(
         array $directories = []
     ): array {
-        return $this->fromDirectories(
-            $directories
+        if ($directories !== []) {
+            return $this->fromDirectories($directories);
+        }
+
+        $checks = $this->registered;
+        uasort(
+            $checks,
+            static fn(CheckInterface $a, CheckInterface $b): int =>
+                ($a->priority() <=> $b->priority())
+                ?: (self::idFor($a) <=> self::idFor($b))
         );
+
+        return array_values($checks);
+    }
+
+    /**
+     * Register project-supplied check instances without coupling the core to
+     * a project's constructors or configuration.
+     *
+     * @param CheckInterface[] $checks
+     * @return CheckInterface[]
+     */
+    public function fromChecks(array $checks): array
+    {
+        foreach ($checks as $check) {
+            if (!$check instanceof CheckInterface) {
+                throw new RuntimeException('All supplied Doctor checks must implement CheckInterface.');
+            }
+            $this->register($check);
+        }
+
+        return $this->all();
+    }
+
+    public static function idFor(CheckInterface $check): string
+    {
+        if ($check instanceof CheckIdentityInterface) {
+            $id = trim($check->id());
+            if ($id !== '') {
+                return $id;
+            }
+        }
+
+        $shortName = (new ReflectionClass($check))->getShortName();
+        $id = preg_replace('/Check$/', '', $shortName) ?: $shortName;
+        $id = preg_replace('/(?<!^)[A-Z]/', '.$0', $id) ?: $id;
+
+        return strtolower($id);
     }
 
     private function classFromFile(

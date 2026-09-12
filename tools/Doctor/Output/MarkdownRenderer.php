@@ -12,7 +12,7 @@ final class MarkdownRenderer
         DoctorResult $report
     ): string {
 
-        $markdown = "# BoardPrep Doctor\n\n";
+        $markdown = "# Haya Doctor\n\n";
 
         foreach ($report->checks as $check) {
 

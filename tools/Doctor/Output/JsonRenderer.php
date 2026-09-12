@@ -21,6 +21,9 @@ final class JsonRenderer
                 'title' =>
                     $check->title,
 
+                'id' =>
+                    $check->id,
+
                 'status' =>
                     $check->status,
 
@@ -35,6 +38,12 @@ final class JsonRenderer
 
                 'score' =>
                     $check->score,
+
+                'scope' =>
+                    $check->scope,
+
+                'metadata' =>
+                    $check->metadata,
 
             ];
 
@@ -59,6 +68,9 @@ final class JsonRenderer
                 'info' =>
                     $report->infoCount(),
 
+                'skip' =>
+                    $report->skipCount(),
+
                 'checks' =>
                     $checks,
 
@@ -69,7 +81,8 @@ final class JsonRenderer
 
             JSON_PRETTY_PRINT
             | JSON_UNESCAPED_SLASHES
-
+            |
+            JSON_THROW_ON_ERROR
         );
 
     }

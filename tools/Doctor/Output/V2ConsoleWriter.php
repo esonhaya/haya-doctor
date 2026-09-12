@@ -20,7 +20,7 @@ final class V2ConsoleWriter
             );
 
         echo PHP_EOL;
-        echo "=== BOARDPREP DOCTOR V2 ===" . PHP_EOL;
+        echo "=== HAYA DOCTOR V2 ===" . PHP_EOL;
         echo "Checks: " . count($result->checks) . PHP_EOL;
         echo "Project Checks: "
             . count(
@@ -51,6 +51,12 @@ final class V2ConsoleWriter
             . PHP_EOL;
         echo "Doctor Warnings: "
             . $result->warningCount('DOCTOR')
+            . PHP_EOL;
+        echo "Project Skipped: "
+            . $result->skipCount('PROJECT')
+            . PHP_EOL;
+        echo "Doctor Skipped: "
+            . $result->skipCount('DOCTOR')
             . PHP_EOL;
         echo "Project Health: "
             . $result->health()

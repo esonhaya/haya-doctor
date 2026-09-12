@@ -44,7 +44,7 @@ final class DoctorResult
             array_filter(
                 $this->checksByScope($scope),
                 fn(CheckResult $check) =>
-                    $check->status === 'WARNING'
+                    $check->status === CheckStatus::WARN
             )
         );
     }
@@ -56,7 +56,7 @@ final class DoctorResult
             array_filter(
                 $this->checksByScope($scope),
                 fn(CheckResult $check) =>
-                    $check->status === 'FAIL'
+                    $check->status === CheckStatus::FAIL
             )
         );
     }
@@ -64,11 +64,17 @@ final class DoctorResult
     public function infoCount(
         string $scope = 'PROJECT'
     ): int {
+        return $this->skipCount($scope);
+    }
+
+    public function skipCount(
+        string $scope = 'PROJECT'
+    ): int {
         return count(
             array_filter(
                 $this->checksByScope($scope),
                 fn(CheckResult $check) =>
-                    $check->status === 'INFO'
+                    $check->status === CheckStatus::SKIP
             )
         );
     }
@@ -95,11 +101,11 @@ final class DoctorResult
             $this->checksByScope($scope)
             as $check
         ) {
-            if ($check->status === 'FAIL') {
+            if ($check->status === CheckStatus::FAIL) {
                 $score -= 15;
             }
 
-            if ($check->status === 'WARNING') {
+            if ($check->status === CheckStatus::WARN) {
                 $score -= 2;
             }
         }
@@ -173,5 +179,10 @@ final class DoctorResult
         string $category
     ): array {
         return $this->findings()->byCategory($category);
+    }
+
+    public function hasFailures(): bool
+    {
+        return $this->failCount() > 0;
     }
 }

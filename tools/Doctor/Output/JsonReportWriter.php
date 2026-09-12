@@ -25,6 +25,7 @@ final class JsonReportWriter
                 'warning' => $result->warningCount(),
                 'fail' => $result->failCount(),
                 'info' => $result->infoCount(),
+                'skip' => $result->skipCount(),
                 'findings' => $result->findingCount(),
             ],
 
@@ -38,11 +39,14 @@ final class JsonReportWriter
                 static function ($check): array {
                     return [
                         'title' => $check->title,
+                        'id' => $check->id,
                         'status' => $check->status,
                         'summary' => $check->summary,
                         'details' => $check->details,
                         'recommendations' => $check->recommendations,
                         'score' => $check->score,
+                        'scope' => $check->scope,
+                        'metadata' => $check->metadata,
                         'findings' => $check->findings->toArray(),
                     ];
                 },
@@ -57,20 +61,20 @@ final class JsonReportWriter
 
         $directory = dirname($path);
 
-        if (!is_dir($directory)) {
-            mkdir(
-                $directory,
-                0777,
-                true
-            );
+        if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+            throw new \RuntimeException("Unable to create Doctor report directory: {$directory}");
         }
 
-        file_put_contents(
+        $written = file_put_contents(
             $path,
             json_encode(
                 $report,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
             )
         );
+
+        if ($written === false) {
+            throw new \RuntimeException("Unable to write Doctor report: {$path}");
+        }
     }
 }

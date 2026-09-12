@@ -13,46 +13,48 @@ require_once
     . '/tools/Doctor/Autoload.php';
 
 use Tools\Doctor\Context\DoctorSelfContext;
-use Tools\Doctor\DTO\DoctorResult;
-use Tools\Doctor\Engine\Doctor;
+use Tools\Doctor\Checks\PhpRuntimeCheck;
+use Tools\Doctor\Engine\CheckRunner;
+use Tools\Doctor\Engine\DoctorExitCode;
 use Tools\Doctor\Metrics\DoctorMetricsPipeline;
 use Tools\Doctor\Metrics\MetricRegistry;
 use Tools\Doctor\Output\V2ConsoleWriter;
+use Tools\Doctor\Registry\CheckRegistry;
 use Tools\Doctor\Snapshot\DoctorSnapshotBuilder;
 
-MetricRegistry::reset();
+try {
+    MetricRegistry::reset();
 
-$snapshot =
-    (new DoctorSnapshotBuilder())
-        ->build();
+    $snapshot =
+        (new DoctorSnapshotBuilder())
+            ->build();
 
-(new DoctorMetricsPipeline())
-    ->analyze($snapshot);
+    (new DoctorMetricsPipeline())
+        ->analyze($snapshot);
 
-DoctorSelfContext::setSnapshot(
-    $snapshot
-);
-
-$result =
-    new DoctorResult();
-
-$checks =
-    (new \Tools\Doctor\Registry\CheckRegistry())
-        ->fromDirectories([
-            $root . '/tools/Doctor/Self/Checks',
-        ]);
-
-foreach ($checks as $check) {
-    $result->add(
-        $check->run()
+    DoctorSelfContext::setSnapshot(
+        $snapshot
     );
+
+    $registry = new CheckRegistry();
+    $registry->fromDirectories([
+        $root . '/tools/Doctor/Self/Checks',
+    ]);
+    $registry->register(new PhpRuntimeCheck());
+    $checks = $registry->all();
+
+    $result =
+        (new CheckRunner())
+            ->run($checks, 'DOCTOR');
+
+    (new V2ConsoleWriter())
+        ->write($result);
+
+    exit(DoctorExitCode::forResult($result));
+} catch (Throwable $exception) {
+    fwrite(
+        STDERR,
+        '[DOCTOR ERROR] ' . $exception->getMessage() . PHP_EOL
+    );
+    exit(DoctorExitCode::forExecutionFailure($exception));
 }
-
-(new V2ConsoleWriter())
-    ->write($result);
-
-exit(
-    $result->failCount('DOCTOR') > 0
-        ? 1
-        : 0
-);

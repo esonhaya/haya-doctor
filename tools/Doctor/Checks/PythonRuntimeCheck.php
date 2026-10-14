@@ -11,22 +11,25 @@ use Tools\Doctor\Python\PythonRuntime;
 
 final class PythonRuntimeCheck implements CheckInterface
 {
+    private const RUNTIME_TIMEOUT = 15;
+
     public function __construct(
         private readonly ?string $root = null
     ) {
     }
 
-    private const TIMEOUT = 5;
-
     public function run(): CheckResult
     {
-        $python = PythonRuntime::executable();
+        $python =
+            PythonRuntime::executable();
 
         if ($python === null) {
             return new CheckResult(
-                title: 'Python Runtime Integrity',
+                title:
+                    'Python Runtime Integrity',
                 status: 'FAIL',
-                summary: 'Python executable was not found.',
+                summary:
+                    'Python executable was not found.',
                 details: [],
                 recommendations: [
                     'Install Python or configure a Python executable.',
@@ -35,117 +38,188 @@ final class PythonRuntimeCheck implements CheckInterface
             );
         }
 
-        $root = $this->root ?? getcwd();
+        $root =
+            $this->root ?? getcwd();
 
-        $inspection = (new PythonProjectInspector())
-            ->inspect($root);
+        $inspection =
+            (new PythonProjectInspector())
+                ->inspect($root);
 
-        $modules = $inspection['runtimeModules'];
+        $files =
+            $inspection['files'] ?? [];
 
-        $baseDetails = [
-            'Python executable: ' . $python,
-            'Python version: '
-                . (PythonRuntime::version($python) ?? 'unknown'),
-            'Python files discovered: '
-                . $inspection['fileCount'],
-            'Syntax candidates: '
-                . $inspection['syntaxCandidateCount'],
-            'Runtime candidates: '
-                . $inspection['runtimeCandidateCount'],
-            'Test files: '
-                . $inspection['testFileCount'],
-            'Archive files: '
-                . $inspection['archiveFileCount'],
-            'Entrypoints: '
-                . $inspection['entrypointCount'],
-        ];
+        $syntaxCandidates =
+            $inspection['syntaxCandidates'] ?? [];
 
-        if ($modules === []) {
+        $runtimeCandidates =
+            $inspection['runtimeCandidates'] ?? [];
+
+        $runtimeModules =
+            $inspection['runtimeModules'] ?? [];
+
+        $testFiles =
+            $inspection['testFiles'] ?? [];
+
+        $archiveFiles =
+            $inspection['archiveFiles'] ?? [];
+
+        $entrypoints =
+            $inspection['entrypoints'] ?? [];
+
+        if ($runtimeModules === []) {
             return new CheckResult(
-                title: 'Python Runtime Integrity',
-                status: 'WARN',
-                summary:
-                    'Python runtime candidates were discovered, but '
-                    . 'no importable runtime modules were identified.',
-                details: array_merge(
-                    $baseDetails,
-                    ['Importable runtime modules: 0']
-                ),
-                recommendations: [
-                    'Review PythonRuntimePolicy if application modules '
-                        . 'are being excluded unexpectedly.',
-                    'Review PythonModuleResolver importability rules.',
-                    'Use PythonSyntaxCheck for source-only validation.',
-                ],
-                score: 70,
-            );
-        }
-
-        $result = $this->importModules(
-            $python,
-            $modules
-        );
-
-        $failures = $result['failures'];
-        $passed = $result['passed'];
-
-        $details = array_merge(
-            $baseDetails,
-            [
-                'Runtime modules tested: ' . count($modules),
-                'Successful imports: ' . $passed,
-                'Failed imports: ' . count($failures),
-                'Runtime import elapsed: '
-                    . number_format($result['elapsed'], 3)
-                    . ' seconds',
-            ]
-        );
-
-        foreach ($failures as $module => $error) {
-            $details[] = $module . ' — ' . $error;
-        }
-
-        if ($result['timeout']) {
-            return new CheckResult(
-                title: 'Python Runtime Integrity',
-                status: 'FAIL',
-                summary:
-                    'Python runtime import scan exceeded the timeout.',
-                details: $details,
-                recommendations: [
-                    'Review the reported Python import path for a '
-                        . 'slow or blocking module.',
-                    'Fix failed Python imports or environment dependencies.',
-                    'Run Doctor again after correcting the root failure.',
-                ],
-                score: 15,
-            );
-        }
-
-        if ($failures === []) {
-            return new CheckResult(
-                title: 'Python Runtime Integrity',
+                title:
+                    'Python Runtime Integrity',
                 status: 'PASS',
                 summary:
-                    count($modules)
-                    . ' Python runtime module(s) passed import.',
-                details: $details,
-                recommendations: [],
+                    'No Python runtime modules discovered.',
+                details: [
+                    'Python executable: ' . $python,
+                    'Python version: '
+                        . (
+                            PythonRuntime::version($python)
+                            ?? 'unknown'
+                        ),
+                    'Python files discovered: '
+                        . count($files),
+                    'Syntax candidates: '
+                        . count($syntaxCandidates),
+                    'Runtime candidates: '
+                        . count($runtimeCandidates),
+                    'Test files: '
+                        . count($testFiles),
+                    'Archive files: '
+                        . count($archiveFiles),
+                    'Entrypoints: '
+                        . count($entrypoints),
+                    'Runtime modules tested: 0',
+                    'Successful imports: 0',
+                    'Failed imports: 0',
+                    'Runtime import elapsed: 0 seconds',
+                    'Python processes: 0',
+                ],
+                recommendations: [
+                    'Continue with Python syntax validation.',
+                ],
                 score: 100,
             );
         }
 
+        $start =
+            microtime(true);
+
+        $result =
+            $this->importModules(
+                $root,
+                $runtimeModules,
+                $python
+            );
+
+        $elapsed =
+            microtime(true) - $start;
+
+        $failedImports =
+            $result['failures'];
+
+        $successfulImports =
+            $result['checked']
+            - count($failedImports);
+
+        $details = [
+            'Python executable: ' . $python,
+            'Python version: '
+                . (
+                    PythonRuntime::version($python)
+                    ?? 'unknown'
+                ),
+            'Python files discovered: '
+                . count($files),
+            'Syntax candidates: '
+                . count($syntaxCandidates),
+            'Runtime candidates: '
+                . count($runtimeCandidates),
+            'Test files: '
+                . count($testFiles),
+            'Archive files: '
+                . count($archiveFiles),
+            'Entrypoints: '
+                . count($entrypoints),
+            'Runtime modules tested: '
+                . $result['checked'],
+            'Successful imports: '
+                . $successfulImports,
+            'Failed imports: '
+                . count($failedImports),
+            'Runtime import elapsed: '
+                . number_format($elapsed, 3)
+                . ' seconds',
+            'Python processes: 1',
+        ];
+
+        if (
+            $result['timeout']
+            || $result['protocolError']
+        ) {
+            $details[] =
+                'Runtime scanner error: '
+                . $result['error'];
+
+            return new CheckResult(
+                title:
+                    'Python Runtime Integrity',
+                status: 'FAIL',
+                summary:
+                    $result['timeout']
+                        ? 'Python runtime import scan exceeded the timeout.'
+                        : 'Python runtime import scan returned an invalid result.',
+                details: $details,
+                recommendations: [
+                    'Review Python runtime availability and import performance.',
+                    'Run Doctor again after correcting the runtime condition.',
+                ],
+                score: 20,
+            );
+        }
+
+        if ($failedImports === []) {
+            return new CheckResult(
+                title:
+                    'Python Runtime Integrity',
+                status: 'PASS',
+                summary:
+                    $result['checked']
+                    . ' Python runtime module(s) passed import.',
+                details: $details,
+                recommendations: [
+                    'Continue with Python syntax validation.',
+                ],
+                score: 100,
+            );
+        }
+
+        foreach (
+            $failedImports
+            as $failure
+        ) {
+            $details[] =
+                $failure['module']
+                . ' — '
+                . $failure['error'];
+        }
+
         return new CheckResult(
-            title: 'Python Runtime Integrity',
+            title:
+                'Python Runtime Integrity',
             status: 'FAIL',
             summary:
-                count($failures)
+                count($failedImports)
                 . ' Python runtime module(s) failed import.',
             details: $details,
             recommendations: [
                 'Fix failed Python imports or environment dependencies.',
-                'Review runtime candidate classification if a test, '
-                    . 'script, or optional module was incorrectly included.',
+                'Review PythonRuntimePolicy if application modules are incorrectly classified.',
+                'Review PythonModuleResolver importability rules.',
+                'Use PythonSyntaxCheck for source-only validation.',
                 'Run Doctor again after correcting the root failure.',
             ],
             score: 15,
@@ -156,114 +230,161 @@ final class PythonRuntimeCheck implements CheckInterface
      * @param string[] $modules
      *
      * @return array{
-     *     failures: array<string, string>,
-     *     passed: int,
+     *     checked: int,
+     *     failures: array<int,array{module:string,error:string}>,
      *     timeout: bool,
-     *     elapsed: float
+     *     protocolError: bool,
+     *     error: string
      * }
      */
     private function importModules(
-        string $python,
-        array $modules
+        string $root,
+        array $modules,
+        string $python
     ): array {
-        $encodedModules = base64_encode(
-            json_encode($modules, JSON_THROW_ON_ERROR)
-        );
+        $payload =
+            base64_encode(
+                json_encode(
+                    array_values($modules),
+                    JSON_THROW_ON_ERROR
+                )
+            );
 
         $script = <<<'PY'
 import base64
 import importlib
 import json
+import os
 import sys
-import time
+import traceback
+
+root = sys.argv[1]
 
 modules = json.loads(
-    base64.b64decode(sys.argv[1]).decode("utf-8")
+    base64.b64decode(
+        sys.argv[2]
+    ).decode("utf-8")
 )
 
-started = time.monotonic()
-passed = 0
-failures = {}
+os.chdir(root)
+
+if root not in sys.path:
+    sys.path.insert(0, root)
+
+failures = []
 
 for module in modules:
     try:
         importlib.import_module(module)
-        passed += 1
     except Exception as exc:
-        failures[module] = (
-            type(exc).__name__ + ": " + str(exc)
+        failures.append(
+            {
+                "module": module,
+                "error": (
+                    type(exc).__name__
+                    + ": "
+                    + str(exc)
+                ),
+            }
         )
 
-payload = {
-    "passed": passed,
-    "failures": failures,
-    "elapsed": time.monotonic() - started,
-}
-
 print(
-    json.dumps(payload),
-    flush=True,
+    json.dumps(
+        {
+            "checked": len(modules),
+            "failures": failures,
+        }
+    )
 )
+
+sys.exit(1 if failures else 0)
 PY;
 
-        $result = PythonRuntime::run(
-            $python,
-            [
-                '-c',
-                $script,
-                $encodedModules,
-            ],
-            self::TIMEOUT
-        );
+        $result =
+            PythonRuntime::run(
+                $python,
+                [
+                    '-c',
+                    $script,
+                    $root,
+                    $payload,
+                ],
+                self::RUNTIME_TIMEOUT
+            );
 
         if ($result['timeout']) {
             return [
+                'checked' => 0,
                 'failures' => [],
-                'passed' => 0,
                 'timeout' => true,
-                'elapsed' => (float) self::TIMEOUT,
+                'protocolError' => false,
+                'error' =>
+                    $result['output'] !== ''
+                        ? $result['output']
+                        : 'Python runtime import scan timed out.',
             ];
         }
 
-        if (!$result['ok']) {
-            return [
-                'failures' => [
-                    '__runtime__' =>
-                        $result['output'] !== ''
-                            ? $result['output']
-                            : 'Python runtime scan failed.',
-                ],
-                'passed' => 0,
-                'timeout' => false,
-                'elapsed' => 0.0,
-            ];
-        }
-
-        try {
-            $payload = json_decode(
-                $result['output'],
-                true,
-                512,
-                JSON_THROW_ON_ERROR
+        $output =
+            trim(
+                $result['output']
             );
-        } catch (Throwable $exception) {
+
+        $decoded =
+            json_decode(
+                $output,
+                true
+            );
+
+        if (
+            !is_array($decoded)
+            || !isset($decoded['checked'])
+            || !isset($decoded['failures'])
+            || !is_array($decoded['failures'])
+        ) {
             return [
-                'failures' => [
-                    '__runtime__' =>
-                        'Invalid runtime scan output: '
-                        . $exception->getMessage(),
-                ],
-                'passed' => 0,
+                'checked' => 0,
+                'failures' => [],
                 'timeout' => false,
-                'elapsed' => 0.0,
+                'protocolError' => true,
+                'error' =>
+                    'Invalid Python runtime scan response.'
+                    . (
+                        $output !== ''
+                            ? ' ' . $output
+                            : ''
+                    ),
+            ];
+        }
+
+        $failures = [];
+
+        foreach (
+            $decoded['failures']
+            as $failure
+        ) {
+            $failures[] = [
+                'module' =>
+                    (string) (
+                        $failure['module']
+                        ?? ''
+                    ),
+                'error' =>
+                    (string) (
+                        $failure['error']
+                        ?? ''
+                    ),
             ];
         }
 
         return [
-            'failures' => $payload['failures'] ?? [],
-            'passed' => (int) ($payload['passed'] ?? 0),
+            'checked' =>
+                (int) $decoded['checked'],
+            'failures' =>
+                $failures,
             'timeout' => false,
-            'elapsed' => (float) ($payload['elapsed'] ?? 0.0),
+            'protocolError' => false,
+            'error' => '',
         ];
     }
 
@@ -275,63 +396,5 @@ PY;
     public function priority(): int
     {
         return 30;
-    }
-
-    /**
-     * @return array{
-     *     ok: bool,
-     *     error: string
-     * }
-     */
-    private function importModule(
-        string $python,
-        string $module
-    ): array {
-        $script = <<<'PY'
-import importlib
-import sys
-
-try:
-    importlib.import_module(sys.argv[1])
-    print("OK")
-except Exception as exc:
-    print(type(exc).__name__ + ": " + str(exc))
-    raise SystemExit(1)
-PY;
-
-        $result = PythonRuntime::run(
-            $python,
-            [
-                '-c',
-                $script,
-                $module,
-            ],
-            self::TIMEOUT
-        );
-
-        if ($result['timeout']) {
-            return [
-                'ok' => false,
-                'error' =>
-                    'Import exceeded '
-                    . self::TIMEOUT
-                    . ' seconds.',
-            ];
-        }
-
-        if ($result['ok']) {
-            return [
-                'ok' => true,
-                'error' => '',
-            ];
-        }
-
-        return [
-            'ok' => false,
-            'error' =>
-                $result['output'] !== ''
-                    ? $result['output']
-                    : 'Python import failed.',
-        ];
     }
 }
